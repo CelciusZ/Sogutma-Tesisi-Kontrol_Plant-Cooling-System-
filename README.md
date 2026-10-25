@@ -1,62 +1,82 @@
-# GUI ile Soğutma Tesisi Sıcaklık Kontrolü
+# Plant Cooling System: Temperature Control with a C# GUI
 
-**Ad Soyad:** Enez Aykut GÜLIRMAK  
+[Türkçe](README.tr.md)
 
-Bu proje, bir soğutma tesisinin sıcaklık kontrolünü sağlayan bir sistemin tasarımı ve uygulamasını içerir. Sistem, dört adet PIC 16F877A mikrodenetleyicisi (1 Master, 3 Slave) ve C# ile geliştirilmiş bir grafik kullanıcı arayüzü (GUI) kullanılarak gerçekleştirilmiştir.
+A temperature control system for the rooms of a cooling plant. Four PIC16F877A microcontrollers (one master, three slaves) talk over an RS-485 bus, and a C# desktop GUI sets the target temperature for each room and shows the measured values.
 
-## Proje Özeti
-- **Amaç:** Soğutma odalarının sıcaklıklarını izlemek ve kontrol etmek.
-- **Haberleşme:** 
-  - Mikrodenetleyiciler arası: **Half Duplex** (MAX487 entegresi ile).
-  - GUI ile sistem: **Full Duplex** (iki MAX487 paralel bağlı).
-- **Donanım:** 
-  - 4 adet PIC 16F877A.
-  - LM35 sıcaklık sensörü (-55°C ile +150°C arası ölçüm).
-  - BCD display (CRC ve sıcaklık gösterimi).
-- **Yazılım:** 
-  - Mikrodenetleyiciler: CCS C ile programlandı.
-  - GUI: C# platformunda geliştirildi.
+![GUI](GUI.PNG)
 
-## Sistem Nasıl Çalışır?
-### Master Cihaz
-- GUI ve Slave cihazlarla haberleşir.
-- Veri alımı: 6 byte’lık paketler (Gönderici Adresi, Alıcı Adresi, ACK, Data Uzunluğu, Data, CRC).
-- RDA kesmesiyle veri işlenir; ACK alındığında LED yanar.
-- `make_packet` fonksiyonu ile Slave’lere veri gönderir.
+## Overview
 
-### Slave Cihazlar
-- LM35 ile ortam sıcaklığını ölçer.
-- Gelen istenen sıcaklık ile mevcut sıcaklığı karşılaştırır, soğutucuyu kontrol eder.
-- BCD display’de CRC ve sıcaklık gösterilir.
-- `send_gui` ile sıcaklık verisi GUI’ye iletilir.
-- Hata durumunda LED ile uyarı verir.
+| | |
+|---|---|
+| Microcontrollers | 4 × PIC16F877A (1 master, 3 slaves) |
+| Sensor | LM35 on each slave (−55 °C to +150 °C) |
+| Display | BCD 7-segment display on each slave (temperature and CRC) |
+| MCU ↔ MCU link | RS-485 half duplex, MAX487 transceivers |
+| GUI ↔ master link | Full duplex, two MAX487 in parallel |
+| Firmware | C, CCS C compiler |
+| GUI | C# WinForms (.NET Framework) |
+| Simulation | Proteus, with virtual COM ports from VSPE |
 
-## C# GUI Arayüzü
-- **COM Port Kontrol:** Bağlantı ayarları (baud rate, parity, data bit).
-- **Transmitter:** İstenen sıcaklık ve ACK gönderimi.
-- **Receiver:** Gelen veriyi gösterir (test amaçlı).
-- **Sistem Ekranı:** Oda sıcaklıkları ve soğutucu durumu takibi.
+## How it works
 
-![GUI Arayüzü](https://github.com/CelciusZ/Cooling-Plant-System/raw/master/GUI.PNG)
+### Packet format
 
-## Kurulum ve Kullanım
-1. **Donanım Kurulumu:**
-   - PIC 16F877A’ları MAX487 ile bağlayın (devre şemaları raporda).
-   - LM35 ve BCD display’leri Slave’lere entegre edin.
-2. **Yazılım Kurulumu:**
-   - CCS C kodlarını mikrodenetleyicilere yükleyin.
-   - C# GUI’yi Visual Studio’da derleyin.
-3. **Sanal Portlar:**
-   - VSPE ile iki sanal COM port oluşturun.
-   - Serial redirector ile portları bağlayın ve emülatörü başlatın.
-4. **Çalıştırma:**
-   - GUI’yi başlatın, COM portu seçin ve sistemi kontrol edin.
+Every message is a 6-byte packet:
 
-## Ekran Görüntüleri
-*(Buraya devre şemaları gibi ek görseller eklenebilir.)*
+| Byte | Field |
+|---|---|
+| 1 | Sender address |
+| 2 | Receiver address |
+| 3 | ACK |
+| 4 | Data length |
+| 5 | Data |
+| 6 | CRC |
 
-## Katkıda Bulunma
-Her türlü öneri ve katkıya açığım! Issues veya PR ile ulaşabilirsiniz.
+The receiver checks the CRC before it uses the data, so a corrupted packet is dropped instead of acted on.
 
-## Lisans
-Bu proje kişisel bir çalışma olup, ticari kullanım için değildir.
+### Master
+
+- Receives the target temperature for each room from the GUI.
+- Handles incoming bytes in the RDA (UART receive) interrupt.
+- Builds packets for the slaves with `make_packet` and forwards them.
+- Lights an LED when a slave acknowledges a packet.
+
+### Slaves
+
+- Read the room temperature from the LM35.
+- Compare it with the target from the master and switch the cooler on or off.
+- Show the temperature and the CRC on the BCD display.
+- Send the measured temperature back to the GUI with `send_gui`.
+- Light an error LED when a packet fails its check.
+
+### GUI
+
+- **COM port settings**: port, baud rate, parity and data bits.
+- **Transmitter**: sends target temperatures and ACKs.
+- **Receiver**: shows the raw incoming data, for testing.
+- **System view**: room temperatures and the state of each cooler.
+
+## Repository layout
+
+```
+Circuit/Devre Şeması.pdsprj          Proteus schematic and simulation
+Embedded Code Master and Slave/code/ CCS C firmware (CRC_MASTER.c, CRC_SLAVE_*.c) and .hex files
+Form1.cs, Form1.Designer.cs          C# GUI
+*.sln, GUI.csproj                    Visual Studio solution
+```
+
+`CRC_SLAVE_3` is included as a `.hex` file only.
+
+## Running it
+
+1. Open `Circuit/Devre Şeması.pdsprj` in Proteus. The `.hex` files are already built. To rebuild them, compile the `.c` files with CCS C.
+2. Create a pair of virtual COM ports with VSPE and connect one of them to the virtual serial port in the Proteus schematic.
+3. Open the `.sln` in Visual Studio and run the GUI.
+4. In the GUI, choose the other COM port, set 9600 baud, no parity, 8 data bits, 1 stop bit (the firmware settings) and connect.
+5. Enter a target temperature for a room and send it. The slave's display and the GUI's system view should update.
+
+## Licence
+
+MIT, see [LICENSE.txt](LICENSE.txt).
