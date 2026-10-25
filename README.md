@@ -4,7 +4,7 @@
 
 A temperature control system for the rooms of a cooling plant. Four PIC16F877A microcontrollers (one master, three slaves) talk over an RS-485 bus, and a C# desktop GUI sets the target temperature for each room and shows the measured values.
 
-![GUI](GUI.PNG)
+![GUI](GUI_EN.png)
 
 ## Overview
 
